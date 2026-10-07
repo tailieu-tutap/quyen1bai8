@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quyển 1 - Nghi thức tu tập sám hối chuyển hóa</title>
+<style>
+:root{--ink:#2b2118;--gold:#c9961a;--paper:#fff;--ground:#e4e1da;--line:#cfc9bd}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.4 Georgia,"Times New Roman",serif}
+#stage{max-width:900px;margin:0 auto;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));min-height:100vh}
+#c{display:block;background:var(--paper);max-width:100%}
+#msg{padding:24px 16px;text-align:center}
+#bar{position:fixed;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));background:var(--ink);border-top:3px solid var(--gold)}
+#bar button{min-width:84px;padding:12px 14px;border:0;border-radius:8px;background:var(--gold);color:var(--ink);font:700 16px Georgia,serif}
+#bar button:disabled{opacity:.35}
+#bar button:focus-visible,#n:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#pg{color:#f3ead8;display:flex;align-items:center;gap:6px}
+#n{width:64px;padding:10px 6px;border:1px solid var(--line);border-radius:8px;text-align:center;font:16px Georgia,serif;background:#fff;color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+<canvas id="c"></canvas>
+<p id="msg">Đang tải tài liệu…</p>
+</div>
+<nav id="bar">
+<button id="prev" type="button">Trang trước</button>
+<span id="pg"><input id="n" type="number" inputmode="numeric" min="1" aria-label="Số trang"> / <span id="t">-</span></span>
+<button id="next" type="button">Trang sau</button>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+(function(){
+var params=new URLSearchParams(location.search);
+var file=params.get("file")||"quyen1.pdf";
+var cur=parseInt(params.get("page"),10)||1;
+var pdf=null,busy=false,queued=null,lastW=0;
+var stage=document.getElementById("stage");
+var canvas=document.getElementById("c");
+var ctx=canvas.getContext("2d");
+var msg=document.getElementById("msg");
+var nIn=document.getElementById("n");
+var tEl=document.getElementById("t");
+var prev=document.getElementById("prev");
+var next=document.getElementById("next");
+
+function fail(){
+  msg.style.display="block";
+  msg.textContent="Không mở được file "+file+". Kiểm tra file PDF nằm cùng thư mục với trang này, rồi tải lại.";
+}
+
+function show(n){
+  if(!pdf)return;
+  n=Math.max(1,Math.min(pdf.numPages,n||1));
+  if(busy){queued=n;return;}
+  busy=true;cur=n;
+  pdf.getPage(n).then(function(page){
+    var w=stage.clientWidth;
+    lastW=w;
+    var base=page.getViewport({scale:1});
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    var vp=page.getViewport({scale:(w/base.width)*dpr});
+    canvas.width=Math.floor(vp.width);
+    canvas.height=Math.floor(vp.height);
+    canvas.style.width=w+"px";
+    canvas.style.height=(canvas.height/dpr)+"px";
+    return page.render({canvasContext:ctx,viewport:vp}).promise;
+  }).then(function(){
+    busy=false;
+    msg.style.display="none";
+    nIn.value=cur;
+    prev.disabled=cur<=1;
+    next.disabled=cur>=pdf.numPages;
+    try{
+      var p=new URLSearchParams(location.search);
+      p.set("page",cur);
+      history.replaceState(null,"","?"+p.toString());
+    }catch(e){}
+    if(queued!==null){var q=queued;queued=null;show(q);}
+  }).catch(function(){busy=false;fail();});
+}
+
+function go(n){window.scrollTo(0,0);show(n);}
+
+prev.addEventListener("click",function(){go(cur-1);});
+next.addEventListener("click",function(){go(cur+1);});
+nIn.addEventListener("change",function(){go(parseInt(nIn.value,10)||cur);});
+document.addEventListener("keydown",function(e){
+  if(e.target===nIn)return;
+  if(e.key==="ArrowLeft")go(cur-1);
+  if(e.key==="ArrowRight")go(cur+1);
+});
+
+var timer=null;
+window.addEventListener("resize",function(){
+  clearTimeout(timer);
+  timer=setTimeout(function(){
+    if(pdf&&stage.clientWidth!==lastW)show(cur);
+  },200);
+});
+
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+pdfjsLib.getDocument(file).promise.then(function(doc){
+  pdf=doc;
+  tEl.textContent=doc.numPages;
+  nIn.max=doc.numPages;
+  show(cur);
+}).catch(fail);
+})();
+</script>
+</body>
+</html>
